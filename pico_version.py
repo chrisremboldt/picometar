@@ -284,11 +284,11 @@ def display_metar(selected_station):
 
 def main():
     connect_to_wifi()
-    
+    set_rtc_from_ntp()  # Set RTC once after connecting to WiFi
+
     while True:  # Always return to the main menu unless the program is exited
-        set_rtc_from_ntp()
         selected_station = main_menu()
-        display_metar(selected_station)  # Renamed for clarity
+        display_metar(selected_station)  # Display METAR data
 
 
 if __name__ == "__main__":

@@ -47,8 +47,8 @@ def set_rtc_from_ntp():
     rtc.datetime((tm[0], tm[1], tm[2], tm[6], tm[3], tm[4], tm[5], 0))
 
 # WiFi details
-ssid = 'Murphys Burrow'
-password = 'oinkoink'
+ssid = 'YOUR_SSID'
+password = 'your_pw'
 
 # Initialize display and buttons
 display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)

@@ -4,11 +4,62 @@ import time
 from picographics import PicoGraphics, DISPLAY_PICO_DISPLAY, PEN_RGB332
 from pimoroni import Button
 from machine import RTC
-
 import socket
 import struct
 
 
+# WiFi details
+ssid = 'your_ssid'
+password = 'your_pw'
+
+# Initialize display and buttons
+display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)
+WIDTH, HEIGHT = display.get_bounds()
+BLACK = display.create_pen(0, 0, 0)
+WHITE = display.create_pen(255, 255, 255)
+button_a = Button(12)
+button_b = Button(13)
+button_x = Button(14)
+button_y = Button(15)
+
+# Predefined list of METAR stations
+metar_stations = [
+    {"state": "AK", "name": "ADAK NAS", "icao": "PADK"},
+    {"state": "AK", "name": "AKHIOK", "icao": "PAKH"},
+    {"state": "AK", "name": "AKUTAN", "icao": "PAUT"},
+    {"state": "CA", "name": "LOS ANGELES INTL", "icao": "KLAX"},
+    {"state": "IL", "name": "CHICAGO O'HARE INTL", "icao": "KORD"},
+    {"state": "GA", "name": "HARTSFIELD-JACKSON ATLANTA INTL", "icao": "KATL"},
+    {"state": "TN", "name": "NASHVILLE INTL APT", "icao": "KBNA"},
+
+]
+
+
+# Connect to WiFi
+def connect_to_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect(ssid, password)
+    while not wlan.isconnected():
+        time.sleep(1)
+    print('WiFi connected')
+
+
+# Function to display METAR data
+def display_text(lines, selected_index=None):
+    display.set_pen(BLACK)
+    display.clear()
+    for i, line in enumerate(lines):
+        if selected_index is not None and i == selected_index:
+            # Highlight the selected line
+            display.set_pen(WHITE)  # White for text
+            display.text(">" + line, 0, i * 10, WIDTH, 2)
+        else:
+            # Non-selected lines
+            display.set_pen(WHITE)
+            display.text(line, 0, i * 10, WIDTH, 2)
+    display.update()
+    
 def ntp_time(host="pool.ntp.org", retries=3):
     NTP_PORT = 123
     NTP_PACKET_FORMAT = "!12I"
@@ -48,121 +99,13 @@ def set_rtc_from_ntp():
         rtc.datetime((tm[0], tm[1], tm[2], tm[6], tm[3], tm[4], tm[5], 0))
     else:
         print("Failed to get NTP time or invalid timestamp.")
-
-
-
-# WiFi details
-ssid = 'your_ssid'
-password = 'your_pw'
-
-# Initialize display and buttons
-display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)
-WIDTH, HEIGHT = display.get_bounds()
-BLACK = display.create_pen(0, 0, 0)
-WHITE = display.create_pen(255, 255, 255)
-button_a = Button(12)
-button_b = Button(13)
-button_x = Button(14)
-button_y = Button(15)
-
-# Predefined list of METAR stations
-metar_stations = [
-    {"state": "AK", "name": "ADAK NAS", "icao": "PADK"},
-    {"state": "AK", "name": "AKHIOK", "icao": "PAKH"},
-    {"state": "AK", "name": "AKUTAN", "icao": "PAUT"},
-    {"state": "CA", "name": "LOS ANGELES INTL", "icao": "KLAX"},
-    {"state": "IL", "name": "CHICAGO O'HARE INTL", "icao": "KORD"},
-    {"state": "GA", "name": "HARTSFIELD-JACKSON ATLANTA INTL", "icao": "KATL"},
-    {"state": "TN", "name": "NASHVILLE INTL APT", "icao": "KBNA"},
-
-]
-
-
-# Connect to WiFi
-def connect_to_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    wlan.connect(ssid, password)
-    while not wlan.isconnected():
-        time.sleep(1)
-    print('WiFi connected')
-
-# Fetch METAR data for a given station
-def fetch_metar_data(selected_station):
-    url = f'https://w1.weather.gov/data/METAR/{selected_station}.1.txt'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-    try:
-        response = urequests.get(url, headers=headers)
-        # Check if the HTTP request was successful
-        if response.status_code == 200:
-            metar_data = response.text
-            response.close()  # Ensure the connection is closed after processing
-
-            # Process the METAR data as before...
-            metar_lines = metar_data.strip().split('\n')[3:]  # Skip header lines
-            cleaned_metar_data = '\n'.join(metar_lines)  # Combine the remaining lines back into a single string
-            
-            # Print the fetched and cleaned METAR data
-            print("Fetched METAR data:")
-            print(cleaned_metar_data)
-            
-            return cleaned_metar_data
-        else:
-            # Handle HTTP errors or unsuccessful responses
-            print(f"Error fetching METAR data for {selected_station}: HTTP {response.status_code}")
-            response.close()  # Ensure the connection is closed after processing
-            return None  # Or return a default error message
-    except Exception as e:
-        # Handle other errors (e.g., network issues, timeout)
-        print(f"Exception occurred while fetching METAR data for {selected_station}: {e}")
-        return None  # Or return a default error message
-
-
-# Function to display METAR data
-def display_text(lines, selected_index=None):
-    display.set_pen(BLACK)
-    display.clear()
-    for i, line in enumerate(lines):
-        if selected_index is not None and i == selected_index:
-            # Highlight the selected line
-            display.set_pen(WHITE)  # White for text
-            display.text(">" + line, 0, i * 10, WIDTH, 2)
-        else:
-            # Non-selected lines
-            display.set_pen(WHITE)
-            display.text(line, 0, i * 10, WIDTH, 2)
-    display.update()
     
-def display_metar_data(metar_data):
-    last_time_update = time.ticks_ms()
-    while True:
-        # Check if the B button is pressed to return to the menu
-        if button_b.read():
-            time.sleep(0.2)  # A short delay to debounce the button press
-            return  # Exit the loop and return to the main menu
-
-        current_time = time.ticks_ms()
-        if time.ticks_diff(current_time, last_time_update) >= 1000:  # Every second
-            current_utc = get_current_utc()  # Fetch the current UTC time on each iteration
-            display.set_pen(BLACK)
-            display.clear()
-            display.set_pen(WHITE)
-            display.set_font("bitmap8")
-            full_text = current_utc + '\n' + metar_data
-            display.text(full_text, 0, 0, WIDTH, 2)
-            display.update()
-            last_time_update = current_time
-
-        time.sleep(0.05)  # A brief sleep to reduce CPU usage without affecting responsiveness
-
-
 
 def get_current_utc():
     rtc = RTC()
     datetime = rtc.datetime()
     return "{:02d}/{:02d}/{:04d} {:02d}:{:02d}:{:02d} UTC".format(datetime[1], datetime[2], datetime[0], datetime[4], datetime[5], datetime[6])
+
 # Function for manual airport code entry
 def enter_airport():
     characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -273,42 +216,76 @@ def select_station():
             return metar_stations[selected_station_index]['icao']
         time.sleep(0.1)
 
+        
+# Fetch METAR data for a given station
+def fetch_metar_data(selected_station):
+    print(f"Attempting to fetch METAR data for {selected_station} at {time.time()}")
+    url = f'https://w1.weather.gov/data/METAR/{selected_station}.1.txt'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    try:
+        response = urequests.get(url, headers=headers)
+        # Check if the HTTP request was successful
+        if response.status_code == 200:
+            metar_data = response.text
+            response.close()  # Ensure the connection is closed after processing
+
+            # Process the METAR data as before...
+            metar_lines = metar_data.strip().split('\n')[3:]  # Skip header lines
+            cleaned_metar_data = '\n'.join(metar_lines)  # Combine the remaining lines back into a single string
+            
+            # Print the fetched and cleaned METAR data
+            print("Fetched METAR data:")
+            print(cleaned_metar_data)
+            
+            return cleaned_metar_data
+        else:
+            # Handle HTTP errors or unsuccessful responses
+            print(f"Error fetching METAR data for {selected_station}: HTTP {response.status_code}")
+            response.close()  # Ensure the connection is closed after processing
+            return None  # Or return a default error message
+    except Exception as e:
+        # Handle other errors (e.g., network issues, timeout)
+        print(f"Exception occurred while fetching METAR data for {selected_station}: {e}")
+        return None  # Or return a default error message
+
 
 def display_metar(selected_station):
-    # Initially fetch METAR data.
     metar_data = fetch_metar_data(selected_station)
-    # Display the initially fetched METAR data immediately.
-    if metar_data:
-        display_metar_data(metar_data)
-
-    # Track the last update time for METAR and NTP data.
     last_metar_update = time.ticks_ms()
     last_ntp_update = time.ticks_ms()
 
     while True:
         current_time = time.ticks_ms()
-        
-        # Refresh METAR data every 2 minutes.
-        if time.ticks_diff(current_time, last_metar_update) >= 120000:  # 120000 ms = 2 minutes
+
+        # Refresh METAR data every 2 minutes
+        if time.ticks_diff(current_time, last_metar_update) >= 120000:
             new_metar_data = fetch_metar_data(selected_station)
             if new_metar_data:
-                metar_data = new_metar_data  # Update the metar_data with new data.
-                display_metar_data(metar_data)  # Display the updated METAR data.
-            last_metar_update = current_time  # Reset the timer for METAR updates.
+                metar_data = new_metar_data  # Update the metar_data with new data
+            last_metar_update = current_time
 
-        # Update NTP time every 2 minutes, similar to METAR data update.
-        if time.ticks_diff(current_time, last_ntp_update) >= 120000:  # 120000 ms = 2 minutes
-            set_rtc_from_ntp()  # Update NTP time.
-            last_ntp_update = current_time  # Reset the timer for NTP updates.
+        # Update NTP time every 2 minutes (if needed for time display)
+        if time.ticks_diff(current_time, last_ntp_update) >= 120000:
+            set_rtc_from_ntp()
+            last_ntp_update = current_time
 
-        # Check if the B button is pressed to return to the main menu.
+        # Display METAR data and current UTC time
+        current_utc = get_current_utc()  # Fetch the current UTC time on each iteration
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(WHITE)
+        display.set_font("bitmap8")
+        full_text = current_utc + '\n' + metar_data
+        display.text(full_text, 0, 0, WIDTH, 2)
+        display.update()
+
+        # Exit loop if B button is pressed
         if button_b.read():
-            time.sleep(0.2)  # Debounce delay.
-            break  # Exit the loop and potentially return to the main menu.
+            break
 
-        time.sleep(0.1)  # Short delay for loop iteration to reduce CPU usage.
-
-
+        time.sleep(0.1)  # A brief sleep to reduce CPU usage without affecting responsiveness
 
 
 def main():

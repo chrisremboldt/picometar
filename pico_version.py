@@ -52,8 +52,8 @@ def set_rtc_from_ntp():
 
 
 # WiFi details
-ssid = 'your ssid'
-password = 'your pw'
+ssid = 'your_ssid'
+password = 'your_pw'
 
 # Initialize display and buttons
 display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)
@@ -275,31 +275,39 @@ def select_station():
 
 
 def display_metar(selected_station):
+    # Initially fetch METAR data.
     metar_data = fetch_metar_data(selected_station)
-    last_metar_update = time.ticks_ms()  # Track the last update time for METAR data
-    last_ntp_update = time.ticks_ms()  # Add a tracker for the last NTP update
-
-    while True:
-        if button_b.read():
-            time.sleep(0.2)  # Debounce delay
-            return  # Exit and return to the main menu
-
-        current_time = time.ticks_ms()
-        
-        # Check if it's time to refresh METAR data (every 2 minutes)
-        if time.ticks_diff(current_time, last_metar_update) >= 120000:  # 120000 ms = 2 minutes
-            metar_data = fetch_metar_data(selected_station)  # Refresh METAR data
-            last_metar_update = current_time  # Update the last update time
-
-        # Check if it's time to update NTP time (every 2 minutes)
-        if time.ticks_diff(current_time, last_ntp_update) >= 120000:  # 120000 ms = 2 minutes
-            set_rtc_from_ntp()  # Update NTP time
-            last_ntp_update = current_time  # Reset last NTP update time
-        
-        # Display METAR data with current time (this will now use the latest NTP time if it was updated)
+    # Display the initially fetched METAR data immediately.
+    if metar_data:
         display_metar_data(metar_data)
 
-        time.sleep(0.1)  # Short delay for responsiveness
+    # Track the last update time for METAR and NTP data.
+    last_metar_update = time.ticks_ms()
+    last_ntp_update = time.ticks_ms()
+
+    while True:
+        current_time = time.ticks_ms()
+        
+        # Refresh METAR data every 2 minutes.
+        if time.ticks_diff(current_time, last_metar_update) >= 120000:  # 120000 ms = 2 minutes
+            new_metar_data = fetch_metar_data(selected_station)
+            if new_metar_data:
+                metar_data = new_metar_data  # Update the metar_data with new data.
+                display_metar_data(metar_data)  # Display the updated METAR data.
+            last_metar_update = current_time  # Reset the timer for METAR updates.
+
+        # Update NTP time every 2 minutes, similar to METAR data update.
+        if time.ticks_diff(current_time, last_ntp_update) >= 120000:  # 120000 ms = 2 minutes
+            set_rtc_from_ntp()  # Update NTP time.
+            last_ntp_update = current_time  # Reset the timer for NTP updates.
+
+        # Check if the B button is pressed to return to the main menu.
+        if button_b.read():
+            time.sleep(0.2)  # Debounce delay.
+            break  # Exit the loop and potentially return to the main menu.
+
+        time.sleep(0.1)  # Short delay for loop iteration to reduce CPU usage.
+
 
 
 

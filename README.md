@@ -5,4 +5,7 @@ This app is built to run on the Cardputer by M5Stack.  It should be fairly easy 
 
 Another known issue is that this currently will only launch when launched from Thonny on a computer connected to the Cardputer.  You can then disconnect your device and use the app.  Attempting to resolve this issue.
 
+FOR THE PI PICO W/ PIMORONI PICO DISPLAY PACK:
+-use the pico_version.py
+
 Please feel free to modify and use as you wish.  License is MIT License.

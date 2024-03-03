@@ -9,46 +9,51 @@ import socket
 import struct
 
 
-def ntp_time(host="pool.ntp.org"):
+def ntp_time(host="pool.ntp.org", retries=3):
     NTP_PORT = 123
     NTP_PACKET_FORMAT = "!12I"
     NTP_DELTA = 2208988800
     NTP_PACKET_SIZE = 48
-    try:
-        # Create a UDP socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        addr = socket.getaddrinfo(host, NTP_PORT)[0][-1]
-        sock.settimeout(1)
+    for attempt in range(retries):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            addr = socket.getaddrinfo(host, NTP_PORT)[0][-1]
+            sock.settimeout(1)
 
-        # Send an NTP packet
-        msg = b'\x1b' + 47 * b'\0'
-        sock.sendto(msg, addr)
+            msg = b'\x1b' + 47 * b'\0'
+            sock.sendto(msg, addr)
 
-        # Receive the response and validate size
-        msg, _ = sock.recvfrom(NTP_PACKET_SIZE)
-        if len(msg) == NTP_PACKET_SIZE:
-            unpacked = struct.unpack(NTP_PACKET_FORMAT, msg)
-            timestamp = unpacked[10] - NTP_DELTA  # Use index 10 for the transmit timestamp
-            return timestamp
-        else:
-            print("Invalid NTP response size.")
-            return None
-    except Exception as e:
-        print(f"Failed to get NTP time: {e}")
-        return None
-    finally:
-        sock.close()
+            msg, _ = sock.recvfrom(NTP_PACKET_SIZE)
+            if len(msg) == NTP_PACKET_SIZE:
+                unpacked = struct.unpack(NTP_PACKET_FORMAT, msg)
+                timestamp = unpacked[10] - NTP_DELTA
+                print(f"NTP Timestamp: {timestamp} (Unix time format)")
+                return timestamp
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed to get NTP time: {e}")
+        finally:
+            sock.close()
+    print("Failed to get NTP time after retries.")
+    return None
+
+
 
 
 def set_rtc_from_ntp():
     timestamp = ntp_time()
-    tm = time.gmtime(timestamp)
-    rtc = RTC()
-    rtc.datetime((tm[0], tm[1], tm[2], tm[6], tm[3], tm[4], tm[5], 0))
+    if timestamp is not None and timestamp > 0:
+        # Convert the timestamp to a struct_time
+        tm = time.localtime(timestamp)
+        rtc = RTC()
+        rtc.datetime((tm[0], tm[1], tm[2], tm[6], tm[3], tm[4], tm[5], 0))
+    else:
+        print("Failed to get NTP time or invalid timestamp.")
+
+
 
 # WiFi details
-ssid = 'YOUR_SSID'
-password = 'your_pw'
+ssid = 'your ssid'
+password = 'your pw'
 
 # Initialize display and buttons
 display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)
@@ -83,26 +88,36 @@ def connect_to_wifi():
     print('WiFi connected')
 
 # Fetch METAR data for a given station
-# Fetch METAR data for a given station
 def fetch_metar_data(selected_station):
-    # Dynamically construct the URL with the selected station's ICAO code
     url = f'https://w1.weather.gov/data/METAR/{selected_station}.1.txt'
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
-    response = urequests.get(url, headers=headers)
-    if response.status_code != 200:
-        # Handle HTTP errors or unsuccessful responses
-        print(f"Error fetching METAR data for {selected_station}: HTTP {response.status_code}")
-        return "Error fetching data"
-    metar_data = response.text
-    response.close()
-    
-    # Process the METAR data as before...
-    metar_lines = metar_data.strip().split('\n')[3:]  # Skip header lines
-    cleaned_metar_data = '\n'.join(metar_lines)  # Combine the remaining lines back into a single string
-    
-    return cleaned_metar_data
+    try:
+        response = urequests.get(url, headers=headers)
+        # Check if the HTTP request was successful
+        if response.status_code == 200:
+            metar_data = response.text
+            response.close()  # Ensure the connection is closed after processing
+
+            # Process the METAR data as before...
+            metar_lines = metar_data.strip().split('\n')[3:]  # Skip header lines
+            cleaned_metar_data = '\n'.join(metar_lines)  # Combine the remaining lines back into a single string
+            
+            # Print the fetched and cleaned METAR data
+            print("Fetched METAR data:")
+            print(cleaned_metar_data)
+            
+            return cleaned_metar_data
+        else:
+            # Handle HTTP errors or unsuccessful responses
+            print(f"Error fetching METAR data for {selected_station}: HTTP {response.status_code}")
+            response.close()  # Ensure the connection is closed after processing
+            return None  # Or return a default error message
+    except Exception as e:
+        # Handle other errors (e.g., network issues, timeout)
+        print(f"Exception occurred while fetching METAR data for {selected_station}: {e}")
+        return None  # Or return a default error message
 
 
 # Function to display METAR data
@@ -145,7 +160,6 @@ def display_metar_data(metar_data):
 
 
 def get_current_utc():
-    set_rtc_from_ntp()  # This sets the RTC to the current UTC time
     rtc = RTC()
     datetime = rtc.datetime()
     return "{:02d}/{:02d}/{:04d} {:02d}:{:02d}:{:02d} UTC".format(datetime[1], datetime[2], datetime[0], datetime[4], datetime[5], datetime[6])
@@ -263,22 +277,29 @@ def select_station():
 def display_metar(selected_station):
     metar_data = fetch_metar_data(selected_station)
     last_metar_update = time.ticks_ms()  # Track the last update time for METAR data
+    last_ntp_update = time.ticks_ms()  # Add a tracker for the last NTP update
 
     while True:
         if button_b.read():
             time.sleep(0.2)  # Debounce delay
             return  # Exit and return to the main menu
 
-        # Check if it's time to refresh METAR data
         current_time = time.ticks_ms()
-        if time.ticks_diff(current_time, last_metar_update) >= 120000:  # Every 2 minutes
+        
+        # Check if it's time to refresh METAR data (every 2 minutes)
+        if time.ticks_diff(current_time, last_metar_update) >= 120000:  # 120000 ms = 2 minutes
             metar_data = fetch_metar_data(selected_station)  # Refresh METAR data
             last_metar_update = current_time  # Update the last update time
 
-        display_metar_data(metar_data)  # Display METAR data with real-time UTC
+        # Check if it's time to update NTP time (every 2 minutes)
+        if time.ticks_diff(current_time, last_ntp_update) >= 120000:  # 120000 ms = 2 minutes
+            set_rtc_from_ntp()  # Update NTP time
+            last_ntp_update = current_time  # Reset last NTP update time
+        
+        # Display METAR data with current time (this will now use the latest NTP time if it was updated)
+        display_metar_data(metar_data)
 
-        time.sleep(0.05)  # Short delay for responsiveness
-
+        time.sleep(0.1)  # Short delay for responsiveness
 
 
 

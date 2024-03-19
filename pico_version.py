@@ -6,11 +6,9 @@ from pimoroni import Button
 from machine import RTC
 import socket
 import struct
+import wifi_config
 
 
-# WiFi details
-ssid = 'your_ssid'
-password = 'your_pw'
 
 # Initialize display and buttons
 display = PicoGraphics(DISPLAY_PICO_DISPLAY, pen_type=PEN_RGB332, rotate=0)
@@ -24,26 +22,20 @@ button_y = Button(15)
 
 # Predefined list of METAR stations
 metar_stations = [
+    {"state": "TN", "name": "NASHVILLE INTL APT", "icao": "KBNA"},
     {"state": "AK", "name": "ADAK NAS", "icao": "PADK"},
     {"state": "AK", "name": "AKHIOK", "icao": "PAKH"},
     {"state": "AK", "name": "AKUTAN", "icao": "PAUT"},
     {"state": "CA", "name": "LOS ANGELES INTL", "icao": "KLAX"},
     {"state": "IL", "name": "CHICAGO O'HARE INTL", "icao": "KORD"},
     {"state": "GA", "name": "HARTSFIELD-JACKSON ATLANTA INTL", "icao": "KATL"},
-    {"state": "TN", "name": "NASHVILLE INTL APT", "icao": "KBNA"},
-
 ]
 
 
-# Connect to WiFi
-def connect_to_wifi():
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    wlan.connect(ssid, password)
-    while not wlan.isconnected():
-        time.sleep(1)
-    print('WiFi connected')
 
+def connect_to_wifi():
+    if not wifi_config.connect_to_wifi():
+        wifi_config.configure_wifi(display, BLACK, WHITE, WIDTH)
 
 # Function to display METAR data
 def display_text(lines, selected_index=None):
@@ -277,8 +269,13 @@ def display_metar(selected_station):
         display.clear()
         display.set_pen(WHITE)
         display.set_font("bitmap8")
-        full_text = current_utc + '\n' + metar_data
-        display.text(full_text, 0, 0, WIDTH, 2)
+        
+        if metar_data:
+            full_text = current_utc + '\n' + metar_data
+            display.text(full_text, 0, 0, WIDTH, 2)
+        else:
+            display.text("Error fetching METAR data", 0, 0, WIDTH, 2)
+            
         display.update()
 
         # Exit loop if B button is pressed
@@ -286,7 +283,6 @@ def display_metar(selected_station):
             break
 
         time.sleep(0.1)  # A brief sleep to reduce CPU usage without affecting responsiveness
-
 
 def main():
     connect_to_wifi()

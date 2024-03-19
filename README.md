@@ -1,11 +1,14 @@
 # picometar
 Micropython METAR Aviation Weather Checker
 
-This app is built to run on the Cardputer by M5Stack.  It should be fairly easy to port it to PicoDisplay/Pico W as well, as the screen dimensions are the same, and the project started on that device.  For this to run on your Cardputer, you'll need Micropython installed, which in my experience is best accomplished by installing the MicroHydra custom firmware via the M5Burner firmware flashing tool from M5Stack.  You will then need to follow the project instructions here to download the files and put them on the device with Thonny: https://github.com/AskewedBox/Cardputer-MicroHydra/tree/main
+This is a small app created for viewing METAR data with a Pi Pico W and a Pimoroni Pico Display.
 
-Another known issue is that this currently will only launch when launched from Thonny on a computer connected to the Cardputer.  You can then disconnect your device and use the app.  Attempting to resolve this issue.
+First go ahead and set up the Pico W and the Pico Display - instructions for that are at the Pimoroni GitHub for the Pico Display.  I used I think their Rainbow Unicorn 1.22 or so for the UFW on the Pico W.  It includes the display libraries used by this code.
 
-FOR THE PI PICO W/ PIMORONI PICO DISPLAY PACK:
--use the pico_version.py
+Then, just save the two .py files, the main one and the wifi_congif.py, to your Pico W using Thonny.  If you want it to run automatically, save the pico_version.py as main.py and it will run at boot and you won't need to have Thonny connected.
+
+Keep in mind that this will save the SSID info (including your password) as a plaintext file on your Pico, so anyone with physical access to your Pico W could read that file easily, so just be careful that it doesn't fall into the wrong hands.
+
+Enjoy, and if you have any questions, requests, or bug reports, hit me up at chris at chrisremboldt dot com.
 
 Please feel free to modify and use as you wish.  License is MIT License.

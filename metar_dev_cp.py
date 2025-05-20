@@ -231,7 +231,8 @@ def get_current_utc():
     year, month, day, weekday, hours, minutes, seconds, subseconds = rtc.datetime()
     
     # Central Standard Time (CST) offset from UTC is -6 hours
-    utc_offset_hours = +6
+    # The RTC stores UTC time, so subtract 6 hours to convert
+    utc_offset_hours = -6
     
     # Adjust hours for UTC
     hours += utc_offset_hours

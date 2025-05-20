@@ -12,3 +12,6 @@ Keep in mind that this will save the SSID info (including your password) as a pl
 Enjoy, and if you have any questions, requests, or bug reports, hit me up at chris at chrisremboldt dot com.
 
 Please feel free to modify and use as you wish.  License is MIT License.
+
+## M5Stack Cardputer
+A version of the script for the M5Stack Cardputer is provided in `cardputer_version.py`. Edit the `WIFI_SSID` and `WIFI_PASS` variables at the top of that file before copying it to your Cardputer. The keyboard uses `/` to select, `,` to go back, `;` for up and `.` for down.

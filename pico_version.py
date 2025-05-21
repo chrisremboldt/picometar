@@ -69,11 +69,11 @@ metar_stations = [
 weather_products = {
     "METAR": {
         "needs_station": True,
-        "url": "https://tgftp.nws.noaa.gov/data/observations/metar/stations/{station}.TXT",
+        "url": "http://tgftp.nws.noaa.gov/data/observations/metar/stations/{station}.TXT",
     },
     "TAF": {
         "needs_station": True,
-        "url": "https://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
+        "url": "http://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
     },
     # Area products don't require a station
     "AIRMET": {
@@ -383,7 +383,7 @@ def display_weather(product, station=None):
             set_rtc_from_ntp()
             last_ntp_update = current_time
 
-        # Display data and current UTC time
+        # Prepare text lines for display
         current_utc = get_current_utc()
         display.set_pen(BLACK)
         display.clear()

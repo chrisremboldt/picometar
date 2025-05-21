@@ -82,11 +82,13 @@ weather_products = {
     },
     "SIGMET": {
         "needs_station": False,
-        "url": "http://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
+        # Using HTTPS here avoids occasional 403 errors
+        "url": "https://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
     },
     "PIREP": {
         "needs_station": False,
-        "url": "http://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
+        # Using HTTPS here avoids occasional 403 errors
+        "url": "https://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
     },
 }
 
@@ -329,7 +331,24 @@ def enter_airport():
 
         time.sleep(0.1)
 
+
     return ''.join(airport_code)
+
+def wrap_text(text, char_width, max_width):
+    """Word-wrap text for a fixed-width font."""
+    words = text.split(" ")
+    lines = []
+    current = ""
+    for word in words:
+        if len(current) + len(word) + (1 if current else 0) > max_width // char_width:
+            lines.append(current)
+            current = word
+        else:
+            if current:
+                current += " "
+            current += word
+    lines.append(current)
+    return lines
 
 def fetch_weather_data(product, station=None, max_retries=3):
     """Fetch text data for the given weather product."""
@@ -392,9 +411,13 @@ def display_weather(product, station=None):
 
         if data:
             full_text = current_utc + '\n' + data
-            lines = full_text.split('\n')
         else:
-            lines = [f"Error fetching {product}"]
+            full_text = f"Error fetching {product}"
+
+        # Wrap each line so it fits the display width
+        lines = []
+        for raw in full_text.split('\n'):
+            lines.extend(wrap_text(raw, 8 * 2, WIDTH))
 
         line_height = 16  # bitmap8 at scale 2 is ~16px tall
         lines_per_screen = HEIGHT // line_height

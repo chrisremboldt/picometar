@@ -1,7 +1,7 @@
 # picometar
 Micropython METAR Aviation Weather Checker
 
-This is a small app created for viewing METAR data with a Pi Pico W and a Pimoroni Pico Display.
+This is a small app created for viewing aviation weather with a Pi Pico W and a Pimoroni Pico Display. A top menu lets you pick between METARs, TAFs and other text products from NOAA.
 
 First go ahead and set up the Pico W and the Pico Display - instructions for that are at the Pimoroni GitHub for the Pico Display.  I used I think their Rainbow Unicorn 1.22 or so for the UFW on the Pico W.  It includes the display libraries used by this code.
 

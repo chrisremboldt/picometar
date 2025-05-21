@@ -64,6 +64,32 @@ metar_stations = [
     {"state": "GA", "name": "HARTSFIELD-JACKSON ATLANTA INTL", "icao": "KATL"},
 ]
 
+# Supported weather products and their URL patterns.  If a product requires
+# a station code in the URL the string contains ``{station}`` as a placeholder.
+weather_products = {
+    "METAR": {
+        "needs_station": True,
+        "url": "https://tgftp.nws.noaa.gov/data/observations/metar/stations/{station}.TXT",
+    },
+    "TAF": {
+        "needs_station": True,
+        "url": "https://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
+    },
+    # Area products don't require a station
+    "AIRMET": {
+        "needs_station": False,
+        "url": "https://tgftp.nws.noaa.gov/data/airmets/airmets.txt",
+    },
+    "SIGMET": {
+        "needs_station": False,
+        "url": "https://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
+    },
+    "PIREP": {
+        "needs_station": False,
+        "url": "https://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
+    },
+}
+
 def connect_to_wifi():
     max_attempts = 3
     for attempt in range(max_attempts):
@@ -165,7 +191,36 @@ def get_current_utc():
         print(f"UTC time error: {e}")
         return "Time unavailable"
 
-def main_menu():
+def product_menu():
+    """Allow the user to choose which weather product to view."""
+    options = list(weather_products.keys())
+    selected = 0
+    display.set_font("bitmap8")
+    last_update = time.ticks_ms()
+
+    while True:
+        current_time = time.ticks_ms()
+        if time.ticks_diff(current_time, last_update) >= 100:
+            display.set_pen(BLACK)
+            display.clear()
+            display.set_pen(WHITE)
+            display.text("Select Product", 10, 0, WIDTH, 3)
+            for i, opt in enumerate(options):
+                y = 20 + i * 20
+                text = ">" + opt if i == selected else opt
+                display.text(text, 10, y, WIDTH, 3)
+            display.update()
+            last_update = current_time
+
+        if button_x.read():
+            selected = (selected - 1) % len(options)
+        elif button_y.read():
+            selected = (selected + 1) % len(options)
+        elif button_a.read():
+            return options[selected]
+        time.sleep(0.1)
+
+def station_menu():
     display.set_font("bitmap8")
     options = ["Select Airport", "Enter Airport"]
     selected_option = 0
@@ -276,73 +331,69 @@ def enter_airport():
 
     return ''.join(airport_code)
 
-def fetch_metar_data(selected_station, max_retries=3):
+def fetch_weather_data(product, station=None, max_retries=3):
+    """Fetch text data for the given weather product."""
+    info = weather_products.get(product)
+    if not info:
+        return None
+    url = info["url"].format(station=station or "")
     for attempt in range(max_retries):
-        print(f"Attempting to fetch METAR data for {selected_station} (attempt {attempt + 1}/{max_retries})")
+        print(f"Fetching {product} (attempt {attempt + 1}/{max_retries})")
         try:
-            url = f'https://tgftp.nws.noaa.gov/data/observations/metar/stations/{selected_station}.TXT'
-            
             headers = {
                 'User-Agent': 'Pico-METAR-Display/1.0',
                 'Accept': 'text/plain'
             }
-            
             print(f"Trying URL: {url}")
             response = urequests.get(url, headers=headers)
-            
             if response.status_code == 200:
-                metar_data = response.text
+                data = response.text
                 response.close()
-                
-                # Clean up the data - NOAA format is simpler
-                metar_lines = [line for line in metar_data.strip().split('\n') if line.strip()]
-                cleaned_metar_data = '\n'.join(metar_lines)
-                            
-                print("Successfully fetched METAR data:", cleaned_metar_data)
-                return cleaned_metar_data
+                lines = [line for line in data.strip().split('\n') if line.strip()]
+                cleaned = '\n'.join(lines)
+                print("Successfully fetched data:", cleaned)
+                return cleaned
             else:
                 print(f"HTTP error {response.status_code}")
                 response.close()
-                
         except Exception as e:
-            print(f"Error fetching METAR data: {e}")
-            time.sleep(1)  # Wait before retry
-            
-    print("All attempts to fetch METAR data failed")
+            print(f"Error fetching {product}: {e}")
+            time.sleep(1)
+    print(f"All attempts to fetch {product} failed")
     return None
 
-def display_metar(selected_station):
-    metar_data = fetch_metar_data(selected_station)
-    last_metar_update = time.ticks_ms()
+def display_weather(product, station=None):
+    data = fetch_weather_data(product, station)
+    last_update = time.ticks_ms()
     last_ntp_update = time.ticks_ms()
 
     while True:
         current_time = time.ticks_ms()
 
-        # Refresh METAR data every 2 minutes
-        if time.ticks_diff(current_time, last_metar_update) >= 120000:
-            new_metar_data = fetch_metar_data(selected_station)
-            if new_metar_data:
-                metar_data = new_metar_data
-            last_metar_update = current_time
+        # Refresh data every 2 minutes
+        if time.ticks_diff(current_time, last_update) >= 120000:
+            new_data = fetch_weather_data(product, station)
+            if new_data:
+                data = new_data
+            last_update = current_time
 
         # Update NTP time every 2 minutes
         if time.ticks_diff(current_time, last_ntp_update) >= 120000:
             set_rtc_from_ntp()
             last_ntp_update = current_time
 
-        # Display METAR data and current UTC time
+        # Display data and current UTC time
         current_utc = get_current_utc()
         display.set_pen(BLACK)
         display.clear()
         display.set_pen(WHITE)
         display.set_font("bitmap8")
         
-        if metar_data:
-            full_text = current_utc + '\n' + metar_data
+        if data:
+            full_text = current_utc + '\n' + data
             display.text(full_text, 0, 0, WIDTH, 2)
         else:
-            display.text("Error fetching METAR data", 0, 0, WIDTH, 2)
+            display.text(f"Error fetching {product}", 0, 0, WIDTH, 2)
             
         display.update()
 
@@ -357,9 +408,11 @@ def main():
         try:
             connect_to_wifi()
             if set_rtc_from_ntp():
-                selected_station = main_menu()
-                if selected_station:
-                    display_metar(selected_station)
+                product = product_menu()
+                station = None
+                if weather_products.get(product, {}).get("needs_station"):
+                    station = station_menu()
+                display_weather(product, station)
             else:
                 display_text(["Error: Could not set time", "Press any button"])
                 while not any([button_a.read(), button_b.read(), button_x.read(), button_y.read()]):

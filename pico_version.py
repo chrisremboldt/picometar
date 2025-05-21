@@ -69,24 +69,24 @@ metar_stations = [
 weather_products = {
     "METAR": {
         "needs_station": True,
-        "url": "https://tgftp.nws.noaa.gov/data/observations/metar/stations/{station}.TXT",
+        "url": "http://tgftp.nws.noaa.gov/data/observations/metar/stations/{station}.TXT",
     },
     "TAF": {
         "needs_station": True,
-        "url": "https://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
+        "url": "http://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
     },
     # Area products don't require a station
     "AIRMET": {
         "needs_station": False,
-        "url": "https://tgftp.nws.noaa.gov/data/airmets/airmets.txt",
+        "url": "http://tgftp.nws.noaa.gov/data/airmets/airmets.txt",
     },
     "SIGMET": {
         "needs_station": False,
-        "url": "https://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
+        "url": "http://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
     },
     "PIREP": {
         "needs_station": False,
-        "url": "https://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
+        "url": "http://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
     },
 }
 
@@ -366,6 +366,7 @@ def display_weather(product, station=None):
     data = fetch_weather_data(product, station)
     last_update = time.ticks_ms()
     last_ntp_update = time.ticks_ms()
+    scroll = 0
 
     while True:
         current_time = time.ticks_ms()
@@ -382,23 +383,37 @@ def display_weather(product, station=None):
             set_rtc_from_ntp()
             last_ntp_update = current_time
 
-        # Display data and current UTC time
+        # Prepare text lines for display
         current_utc = get_current_utc()
         display.set_pen(BLACK)
         display.clear()
         display.set_pen(WHITE)
         display.set_font("bitmap8")
-        
+
         if data:
             full_text = current_utc + '\n' + data
-            display.text(full_text, 0, 0, WIDTH, 2)
+            lines = full_text.split('\n')
         else:
-            display.text(f"Error fetching {product}", 0, 0, WIDTH, 2)
-            
+            lines = [f"Error fetching {product}"]
+
+        line_height = 16  # bitmap8 at scale 2 is ~16px tall
+        lines_per_screen = HEIGHT // line_height
+        scroll = min(max(scroll, 0), max(0, len(lines) - lines_per_screen))
+
+        for i in range(lines_per_screen):
+            line_index = scroll + i
+            if line_index >= len(lines):
+                break
+            display.text(lines[line_index], 0, i * line_height, WIDTH, 2)
+
         display.update()
 
-        # Exit loop if B button is pressed
-        if button_b.read():
+        if button_x.read():
+            scroll = max(0, scroll - 1)
+        elif button_y.read():
+            if scroll + lines_per_screen < len(lines):
+                scroll += 1
+        elif button_b.read():
             break
 
         time.sleep(0.1)

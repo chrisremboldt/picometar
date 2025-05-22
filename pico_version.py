@@ -331,7 +331,6 @@ def enter_airport():
 
         time.sleep(0.1)
 
-
     return ''.join(airport_code)
 
 def wrap_text(text, char_width, max_width):
@@ -381,8 +380,10 @@ def fetch_weather_data(product, station=None, max_retries=3):
     print(f"All attempts to fetch {product} failed")
     return None
 
-TEXT_SCALE = 1
-LINE_HEIGHT = 10  # bitmap8 at scale 1 is ~8px tall
+# Text rendering configuration
+TEXT_SCALE = 2
+LINE_HEIGHT = 16  # bitmap8 at scale 2 is ~16px tall
+CHAR_WIDTH = 6    # Approximate average character width in pixels
 
 def display_weather(product, station=None):
     data = fetch_weather_data(product, station)
@@ -420,7 +421,7 @@ def display_weather(product, station=None):
         # Wrap each line so it fits the display width
         lines = []
         for raw in full_text.split('\n'):
-            lines.extend(wrap_text(raw, 8 * TEXT_SCALE, WIDTH))
+            lines.extend(wrap_text(raw, CHAR_WIDTH * TEXT_SCALE, WIDTH))
 
         line_height = LINE_HEIGHT
         lines_per_screen = HEIGHT // line_height

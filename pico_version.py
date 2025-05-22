@@ -92,12 +92,9 @@ weather_products = {
     },
     "ISIGMET": {
         "needs_station": False,
-        # International SIGMET feed from AviationWeather.gov limited
-        # to a U.S. bounding box to keep downloads small
-        "url": (
-            "https://aviationweather.gov/api/data/isigmet"
-            "?format=text&bbox=-135,20,-60,55"
-        ),
+        # International SIGMET feed from AviationWeather.gov
+        # Use plain text format so pages are separated by dashed lines
+        "url": "https://aviationweather.gov/api/data/isigmet?format=text",
     },
 }
 
@@ -380,6 +377,34 @@ def parse_isigmet(raw_text):
         wrapped_pages.append(lines)
     return wrapped_pages
 
+def fetch_isigmet_stream(url):
+    """Fetch ISIGMET data using streaming to lower memory usage."""
+    try:
+        headers = {
+            'User-Agent': 'Pico-METAR-Display/1.0',
+            'Accept': 'text/plain'
+        }
+        print(f"Trying URL: {url}")
+        response = urequests.get(url, headers=headers, stream=True)
+        if response.status_code != 200:
+            print(f"HTTP error {response.status_code}")
+            response.close()
+            return None
+
+        lines = []
+        while True:
+            chunk = response.raw.readline()
+            if not chunk:
+                break
+            lines.append(chunk.decode('utf-8').rstrip())
+        response.close()
+        cleaned = '\n'.join([l for l in lines if l])
+        print("Successfully fetched data:", cleaned)
+        return cleaned
+    except Exception as e:
+        print(f"Error fetching ISIGMET: {e}")
+        return None
+
 def fetch_weather_data(product, station=None, max_retries=3):
     """Fetch text data for the given weather product."""
     info = weather_products.get(product)
@@ -393,6 +418,12 @@ def fetch_weather_data(product, station=None, max_retries=3):
                 'User-Agent': 'Pico-METAR-Display/1.0',
                 'Accept': 'text/plain'
             }
+            if product == "ISIGMET":
+                data = fetch_isigmet_stream(url)
+                if data:
+                    return data
+                else:
+                    raise Exception("Failed to fetch ISIGMET")
             print(f"Trying URL: {url}")
             response = urequests.get(url, headers=headers)
             if response.status_code == 200:
@@ -445,12 +476,15 @@ def display_weather(product, station=None):
         display.set_pen(WHITE)
         display.set_font("bitmap8")
 
-        if product == "ISIGMET" and data:
-            if pages is None:
-                pages = parse_isigmet(data)
-            if page_index >= len(pages):
-                page_index = len(pages) - 1
-            lines = pages[page_index]
+        if product == "ISIGMET" and data is not None:
+            if data.strip() == "":
+                lines = ["No active ISIGMETs"]
+            else:
+                if pages is None:
+                    pages = parse_isigmet(data)
+                if page_index >= len(pages):
+                    page_index = len(pages) - 1
+                lines = pages[page_index]
         else:
             if data:
                 full_text = current_utc + '\n' + data

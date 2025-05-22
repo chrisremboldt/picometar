@@ -331,7 +331,6 @@ def enter_airport():
 
         time.sleep(0.1)
 
-
     return ''.join(airport_code)
 
 def wrap_text(text, char_width, max_width):

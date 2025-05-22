@@ -381,6 +381,9 @@ def fetch_weather_data(product, station=None, max_retries=3):
     print(f"All attempts to fetch {product} failed")
     return None
 
+TEXT_SCALE = 1
+LINE_HEIGHT = 10  # bitmap8 at scale 1 is ~8px tall
+
 def display_weather(product, station=None):
     data = fetch_weather_data(product, station)
     last_update = time.ticks_ms()
@@ -417,9 +420,9 @@ def display_weather(product, station=None):
         # Wrap each line so it fits the display width
         lines = []
         for raw in full_text.split('\n'):
-            lines.extend(wrap_text(raw, 8 * 2, WIDTH))
+            lines.extend(wrap_text(raw, 8 * TEXT_SCALE, WIDTH))
 
-        line_height = 16  # bitmap8 at scale 2 is ~16px tall
+        line_height = LINE_HEIGHT
         lines_per_screen = HEIGHT // line_height
         scroll = min(max(scroll, 0), max(0, len(lines) - lines_per_screen))
 
@@ -427,7 +430,7 @@ def display_weather(product, station=None):
             line_index = scroll + i
             if line_index >= len(lines):
                 break
-            display.text(lines[line_index], 0, i * line_height, WIDTH, 2)
+            display.text(lines[line_index], 0, i * line_height, WIDTH, TEXT_SCALE)
 
         display.update()
 

@@ -92,8 +92,12 @@ weather_products = {
     },
     "ISIGMET": {
         "needs_station": False,
-        # International SIGMET feed from AviationWeather.gov
-        "url": "https://aviationweather.gov/api/data/isigmet",
+        # International SIGMET feed from AviationWeather.gov limited
+        # to a U.S. bounding box to keep downloads small
+        "url": (
+            "https://aviationweather.gov/api/data/isigmet"
+            "?format=text&bbox=-135,20,-60,55"
+        ),
     },
 }
 

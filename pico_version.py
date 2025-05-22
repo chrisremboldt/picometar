@@ -383,7 +383,7 @@ def fetch_weather_data(product, station=None, max_retries=3):
 # Text rendering configuration
 TEXT_SCALE = 2
 LINE_HEIGHT = 16  # bitmap8 at scale 2 is ~16px tall
-CHAR_WIDTH = 6    # Approximate average character width in pixels
+CHAR_WIDTH = 5    # Approximate average character width in pixels
 
 def display_weather(product, station=None):
     data = fetch_weather_data(product, station)

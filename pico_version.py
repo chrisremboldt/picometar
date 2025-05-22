@@ -90,6 +90,12 @@ weather_products = {
         # Using HTTPS here avoids occasional 403 errors
         "url": "https://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
     },
+    "ISIGMET": {
+        "needs_station": False,
+        # International SIGMET feed from AviationWeather.gov
+        # Use plain text format so pages are separated by dashed lines
+        "url": "https://aviationweather.gov/api/data/isigmet?format=text",
+    },
 }
 
 def connect_to_wifi():
@@ -349,6 +355,56 @@ def wrap_text(text, char_width, max_width):
     lines.append(current)
     return lines
 
+def parse_isigmet(raw_text):
+    """Split ISIGMET data into pages and reorder US pages first."""
+    import re
+
+    pages = [p.strip() for p in raw_text.split("----------------------") if p.strip()]
+
+    def has_us_identifier(text):
+        return re.search(r"\bK[A-Z]{3}\b", text) is not None
+
+    us_pages = [p for p in pages if has_us_identifier(p)]
+    other_pages = [p for p in pages if not has_us_identifier(p)]
+    ordered_pages = us_pages + other_pages
+
+    # Split each page into wrapped lines
+    wrapped_pages = []
+    for page in ordered_pages:
+        lines = []
+        for raw in page.split("\n"):
+            lines.extend(wrap_text(raw, CHAR_WIDTH * TEXT_SCALE, WIDTH))
+        wrapped_pages.append(lines)
+    return wrapped_pages
+
+def fetch_isigmet_stream(url):
+    """Fetch ISIGMET data using streaming to lower memory usage."""
+    try:
+        headers = {
+            'User-Agent': 'Pico-METAR-Display/1.0',
+            'Accept': 'text/plain'
+        }
+        print(f"Trying URL: {url}")
+        response = urequests.get(url, headers=headers, stream=True)
+        if response.status_code != 200:
+            print(f"HTTP error {response.status_code}")
+            response.close()
+            return None
+
+        lines = []
+        while True:
+            chunk = response.raw.readline()
+            if not chunk:
+                break
+            lines.append(chunk.decode('utf-8').rstrip())
+        response.close()
+        cleaned = '\n'.join([l for l in lines if l])
+        print("Successfully fetched data:", cleaned)
+        return cleaned
+    except Exception as e:
+        print(f"Error fetching ISIGMET: {e}")
+        return None
+
 def fetch_weather_data(product, station=None, max_retries=3):
     """Fetch text data for the given weather product."""
     info = weather_products.get(product)
@@ -362,6 +418,12 @@ def fetch_weather_data(product, station=None, max_retries=3):
                 'User-Agent': 'Pico-METAR-Display/1.0',
                 'Accept': 'text/plain'
             }
+            if product == "ISIGMET":
+                data = fetch_isigmet_stream(url)
+                if data:
+                    return data
+                else:
+                    raise Exception("Failed to fetch ISIGMET")
             print(f"Trying URL: {url}")
             response = urequests.get(url, headers=headers)
             if response.status_code == 200:
@@ -390,6 +452,8 @@ def display_weather(product, station=None):
     last_update = time.ticks_ms()
     last_ntp_update = time.ticks_ms()
     scroll = 0
+    page_index = 0
+    pages = None
 
     while True:
         current_time = time.ticks_ms()
@@ -406,22 +470,29 @@ def display_weather(product, station=None):
             set_rtc_from_ntp()
             last_ntp_update = current_time
 
-        # Prepare text lines for display
         current_utc = get_current_utc()
         display.set_pen(BLACK)
         display.clear()
         display.set_pen(WHITE)
         display.set_font("bitmap8")
 
-        if data:
-            full_text = current_utc + '\n' + data
+        if product == "ISIGMET" and data is not None:
+            if data.strip() == "":
+                lines = ["No active ISIGMETs"]
+            else:
+                if pages is None:
+                    pages = parse_isigmet(data)
+                if page_index >= len(pages):
+                    page_index = len(pages) - 1
+                lines = pages[page_index]
         else:
-            full_text = f"Error fetching {product}"
-
-        # Wrap each line so it fits the display width
-        lines = []
-        for raw in full_text.split('\n'):
-            lines.extend(wrap_text(raw, CHAR_WIDTH * TEXT_SCALE, WIDTH))
+            if data:
+                full_text = current_utc + '\n' + data
+            else:
+                full_text = f"Error fetching {product}"
+            lines = []
+            for raw in full_text.split('\n'):
+                lines.extend(wrap_text(raw, CHAR_WIDTH * TEXT_SCALE, WIDTH))
 
         line_height = LINE_HEIGHT
         lines_per_screen = HEIGHT // line_height
@@ -436,10 +507,18 @@ def display_weather(product, station=None):
         display.update()
 
         if button_x.read():
-            scroll = max(0, scroll - 1)
+            if scroll > 0:
+                scroll = max(0, scroll - 1)
+            elif product == "ISIGMET" and pages and page_index > 0:
+                page_index -= 1
+                scroll = 0
         elif button_y.read():
             if scroll + lines_per_screen < len(lines):
                 scroll += 1
+            else:
+                if product == "ISIGMET" and pages and page_index + 1 < len(pages):
+                    page_index += 1
+                    scroll = 0
         elif button_b.read():
             break
 

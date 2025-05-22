@@ -93,8 +93,8 @@ weather_products = {
     "ISIGMET": {
         "needs_station": False,
         # International SIGMET feed from AviationWeather.gov
-        # Use plain text format so pages are separated by dashed lines
-        "url": "https://aviationweather.gov/api/data/isigmet?format=text",
+        # The API already returns plain text separated by dashed lines
+        "url": "https://aviationweather.gov/api/data/isigmet",
     },
 }
 
@@ -391,14 +391,32 @@ def fetch_isigmet_stream(url):
             response.close()
             return None
 
-        lines = []
+        import re
+        pages = []
+        current_lines = []
+        us_id = False
+        pattern = re.compile(r"\bK[A-Z]{3}\b")
+
         while True:
             chunk = response.raw.readline()
             if not chunk:
                 break
-            lines.append(chunk.decode('utf-8').rstrip())
+            line = chunk.decode('utf-8').rstrip()
+            if line == "----------------------":
+                if current_lines and us_id:
+                    pages.append('\n'.join(current_lines))
+                current_lines = []
+                us_id = False
+                continue
+            current_lines.append(line)
+            if not us_id and pattern.search(line):
+                us_id = True
+
+        if current_lines and us_id:
+            pages.append('\n'.join(current_lines))
+
         response.close()
-        cleaned = '\n'.join([l for l in lines if l])
+        cleaned = '\n----------------------\n'.join(pages)
         print("Successfully fetched data:", cleaned)
         return cleaned
     except Exception as e:

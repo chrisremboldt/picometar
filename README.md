@@ -5,6 +5,7 @@ This is a small app created for viewing aviation weather with a Pi Pico W and a 
 
 The "ISIGMET" option pulls international SIGMETs from AviationWeather.gov using the plain text format. Pages are separated by dashed lines and U.S. entries containing identifiers starting with `K` are shown first. If no SIGMETs are active, a notice is displayed. Use **X** and **Y** to move within a SIGMET and to advance to the next or previous report when reaching the end.
 
+
 Some of the area weather products on NOAA's server require HTTPS while others only allow plain HTTP. The app now uses whichever protocol works for each feed.
 
 First go ahead and set up the Pico W and the Pico Display - instructions for that are at the Pimoroni GitHub for the Pico Display.  I used I think their Rainbow Unicorn 1.22 or so for the UFW on the Pico W.  It includes the display libraries used by this code.

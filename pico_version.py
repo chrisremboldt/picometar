@@ -75,26 +75,21 @@ weather_products = {
         "needs_station": True,
         "url": "http://tgftp.nws.noaa.gov/data/forecasts/taf/stations/{station}.TXT",
     },
-    # Area products don't require a station
     "AIRMET": {
         "needs_station": False,
-        "url": "http://tgftp.nws.noaa.gov/data/airmets/airmets.txt",
+        "url": "https://aviationweather.gov/api/data/gairmet?format=raw",
     },
     "SIGMET": {
         "needs_station": False,
-        # Using HTTPS here avoids occasional 403 errors
-        "url": "https://tgftp.nws.noaa.gov/data/sigmets/sigmets.txt",
+        "url": "https://aviationweather.gov/api/data/airsigmet?format=raw",
     },
     "PIREP": {
         "needs_station": False,
-        # Using HTTPS here avoids occasional 403 errors
-        "url": "https://tgftp.nws.noaa.gov/data/aircraftreports/pireps.txt",
+        "url": "https://aviationweather.gov/api/data/pirep?format=raw",
     },
     "ISIGMET": {
         "needs_station": False,
-        # International SIGMET feed from AviationWeather.gov
-        # The API already returns plain text separated by dashed lines
-        "url": "https://aviationweather.gov/api/data/isigmet",
+        "url": "https://aviationweather.gov/api/data/isigmet?format=raw",
     },
 }
 
@@ -377,86 +372,145 @@ def parse_isigmet(raw_text):
         wrapped_pages.append(lines)
     return wrapped_pages
 
-def fetch_isigmet_stream(url):
-    """Fetch ISIGMET data using streaming to lower memory usage."""
+def fetch_large_data_stream(url, max_size=8192, chunk_size=1024):
+    """Generic function to fetch large weather data with memory management."""
     try:
         headers = {
             'User-Agent': 'Pico-METAR-Display/1.0',
             'Accept': 'text/plain'
         }
         print(f"Trying URL: {url}")
-        response = urequests.get(url, headers=headers, stream=True)
+        
+        response = urequests.get(url, headers=headers)
         if response.status_code != 200:
             print(f"HTTP error {response.status_code}")
             response.close()
             return None
 
-        import re
-        pages = []
-        current_lines = []
-        us_id = False
-        pattern = re.compile(r"\bK[A-Z]{3}\b")
-
-        while True:
-            chunk = response.raw.readline()
-            if not chunk:
-                break
-            line = chunk.decode('utf-8').rstrip()
-            if line == "----------------------":
-                if current_lines and us_id:
-                    pages.append('\n'.join(current_lines))
-                current_lines = []
-                us_id = False
-                continue
-            current_lines.append(line)
-            if not us_id and pattern.search(line):
-                us_id = True
-
-        if current_lines and us_id:
-            pages.append('\n'.join(current_lines))
-
+        # Read content in smaller chunks to avoid memory allocation issues
+        content_parts = []
+        total_size = 0
+        
+        try:
+            while True:
+                chunk = response.raw.read(chunk_size)
+                if not chunk:
+                    break
+                
+                total_size += len(chunk)
+                if total_size > max_size:
+                    print(f"Response too large ({total_size} bytes), truncating at {max_size}")
+                    break
+                    
+                content_parts.append(chunk.decode('utf-8'))
+                
+        except MemoryError:
+            print("Memory error during read, using partial data")
+        
         response.close()
-        cleaned = '\n----------------------\n'.join(pages)
-        print("Successfully fetched data:", cleaned)
-        return cleaned
+        
+        # Join the parts
+        result = ''.join(content_parts).strip()
+        print(f"Fetched data: {len(result)} characters")
+        return result
+        
+    except MemoryError:
+        print("Memory allocation failed")
+        return ""  # Return empty string instead of None
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return None
+
+def fetch_pirep_stream(url):
+    """Fetch PIREP data with memory optimization and filtering."""
+    try:
+        # Add parameters to limit response size
+        # Get only recent PIREPs (last 2 hours) to reduce data volume
+        limited_url = f"{url}&age=2"
+        
+        return fetch_large_data_stream(limited_url, max_size=6144, chunk_size=512)
+        
+    except Exception as e:
+        print(f"Error fetching PIREP: {e}")
+        return None
+
+def fetch_sigmet_stream(url):
+    """Fetch SIGMET data with memory optimization."""
+    try:
+        # SIGMETs are usually smaller but can still cause issues
+        return fetch_large_data_stream(url, max_size=8192, chunk_size=1024)
+        
+    except Exception as e:
+        print(f"Error fetching SIGMET: {e}")
+        return None
+
+def fetch_isigmet_stream(url):
+    """Fetch ISIGMET data with memory optimization."""
+    try:
+        # Add parameters to limit response size
+        # Filter by hazard type to reduce data volume
+        limited_url = f"{url}&hazard=turb"  # Only turbulence SIGMETs
+        
+        return fetch_large_data_stream(limited_url, max_size=8192, chunk_size=1024)
+        
     except Exception as e:
         print(f"Error fetching ISIGMET: {e}")
         return None
 
 def fetch_weather_data(product, station=None, max_retries=3):
-    """Fetch text data for the given weather product."""
+    """Fetch text data for the given weather product with memory management."""
     info = weather_products.get(product)
     if not info:
         return None
     url = info["url"].format(station=station or "")
+    
     for attempt in range(max_retries):
         print(f"Fetching {product} (attempt {attempt + 1}/{max_retries})")
         try:
-            headers = {
-                'User-Agent': 'Pico-METAR-Display/1.0',
-                'Accept': 'text/plain'
-            }
-            if product == "ISIGMET":
+            # Use specialized fetchers for large data products
+            if product == "PIREP":
+                data = fetch_pirep_stream(url)
+            elif product == "SIGMET":
+                data = fetch_sigmet_stream(url)
+            elif product == "ISIGMET":
                 data = fetch_isigmet_stream(url)
-                if data:
-                    return data
+            else:
+                # Regular handling for METAR, TAF, AIRMET
+                headers = {
+                    'User-Agent': 'Pico-METAR-Display/1.0',
+                    'Accept': 'text/plain'
+                }
+                print(f"Trying URL: {url}")
+                response = urequests.get(url, headers=headers)
+                if response.status_code == 200:
+                    data = response.text
+                    response.close()
+                    
+                    # Clean up the data
+                    lines = [line for line in data.strip().split('\n') if line.strip()]
+                    cleaned = '\n'.join(lines)
+                    print("Successfully fetched data:", cleaned[:200] + "..." if len(cleaned) > 200 else cleaned)
+                    return cleaned
                 else:
-                    raise Exception("Failed to fetch ISIGMET")
-            print(f"Trying URL: {url}")
-            response = urequests.get(url, headers=headers)
-            if response.status_code == 200:
-                data = response.text
-                response.close()
+                    print(f"HTTP error {response.status_code}")
+                    response.close()
+                    continue
+            
+            # Handle the streamed data response
+            if data is not None:  # Allow empty string but not None
+                if data == "":
+                    return "No current data available"
+                # Clean up the data
                 lines = [line for line in data.strip().split('\n') if line.strip()]
                 cleaned = '\n'.join(lines)
-                print("Successfully fetched data:", cleaned)
                 return cleaned
             else:
-                print(f"HTTP error {response.status_code}")
-                response.close()
+                raise Exception(f"Failed to fetch {product}")
+                
         except Exception as e:
             print(f"Error fetching {product}: {e}")
             time.sleep(1)
+    
     print(f"All attempts to fetch {product} failed")
     return None
 
